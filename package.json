@@ -1,0 +1,29 @@
+{
+  "name": "stripe-mcp-client",
+  "version": "1.0.0",
+  "description": "A lightweight client for interacting with Stripe's MCP server to create payment links",
+  "type": "module",
+  "main": "src/stripe-mcp-client.js",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "example": "node examples/sample-usage.js"
+  },
+  "keywords": [
+    "stripe",
+    "mcp",
+    "payment",
+    "model-context-protocol"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.7.0"
+  },
+  "devDependencies": {
+    "jest": "^29.6.0",
+    "@jest/globals": "^29.6.0"
+  },
+  "peerDependencies": {
+    "@stripe/mcp": "^0.1.0"
+  }
+}

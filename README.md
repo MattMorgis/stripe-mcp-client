@@ -1,0 +1,218 @@
+# Stripe MCP Client
+
+A lightweight JavaScript client for interacting with Stripe's Model Context Protocol (MCP) server to create payment links. This client is designed to be used inside your own MCP server to enable integration with Stripe's payment services.
+
+## Features
+
+- Simple API for creating Stripe payment links
+- Lightweight wrapper around the MCP client
+- Supports custom options and connected accounts
+- Automatic management of the MCP connection
+
+## Installation
+
+```bash
+npm install stripe-mcp-client
+```
+
+Make sure you have Node.js 16+ installed.
+
+### Dependencies
+
+This package depends on:
+
+- `@modelcontextprotocol/sdk`: For the MCP client implementation
+- `@stripe/mcp`: For the Stripe MCP server (peer dependency)
+
+## Usage
+
+### Basic Usage
+
+```javascript
+import StripeMcpClient from 'stripe-mcp-client';
+
+async function createPaymentLink() {
+  // Initialize the client
+  const client = new StripeMcpClient({
+    apiKey: 'your_stripe_api_key', // Or set STRIPE_API_KEY env var
+    debug: true, // Optional: Enable debug logging
+  });
+
+  try {
+    // Connect to the Stripe MCP server
+    await client.connect();
+
+    // Create a payment link
+    const paymentLink = await client.createPaymentLink({
+      line_items: [
+        {
+          price: 'price_123', // Your Stripe price ID
+          quantity: 1,
+        },
+      ],
+      after_completion: {
+        type: 'redirect',
+        redirect: {
+          url: 'https://example.com/thank-you',
+        },
+      },
+    });
+
+    console.log(`Payment link created: ${paymentLink.url}`);
+    return paymentLink;
+  } finally {
+    // Always close the connection when done
+    await client.close();
+  }
+}
+
+createPaymentLink().catch(console.error);
+```
+
+### Using with Environment Variables
+
+```javascript
+// Set in your environment: STRIPE_API_KEY, STRIPE_ACCOUNT (optional)
+import StripeMcpClient from 'stripe-mcp-client';
+
+async function createPaymentLink() {
+  const client = new StripeMcpClient();
+  try {
+    await client.connect();
+    const paymentLink = await client.createPaymentLink({
+      line_items: [{price: 'price_123', quantity: 1}],
+    });
+    return paymentLink;
+  } finally {
+    await client.close();
+  }
+}
+```
+
+### Using Within Your Own MCP Server
+
+```javascript
+import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
+import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
+import StripeMcpClient from 'stripe-mcp-client';
+import {z} from 'zod';
+
+// Create your MCP server
+const server = new McpServer({
+  name: 'My Payment Server',
+  version: '1.0.0',
+});
+
+// Add a tool that creates Stripe payment links
+server.tool(
+  'create_payment_link',
+  'Create a Stripe payment link for checkout',
+  {
+    product_name: z.string().describe('Name of the product'),
+    price_amount: z.number().describe('Price amount in cents'),
+    currency: z
+      .string()
+      .default('usd')
+      .describe('Currency code (default: usd)'),
+  },
+  async ({product_name, price_amount, currency}) => {
+    // Initialize the Stripe MCP client
+    const stripeClient = new StripeMcpClient();
+
+    try {
+      await stripeClient.connect();
+
+      // Create a payment link using the Stripe MCP server
+      const paymentLink = await stripeClient.createPaymentLink({
+        line_items: [
+          {
+            price_data: {
+              currency: currency,
+              product_data: {
+                name: product_name,
+              },
+              unit_amount: price_amount,
+            },
+            quantity: 1,
+          },
+        ],
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              payment_link_url: paymentLink.url,
+              payment_link_id: paymentLink.id,
+            }),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error creating payment link: ${error.message}`,
+          },
+        ],
+        isError: true,
+      };
+    } finally {
+      await stripeClient.close();
+    }
+  }
+);
+
+// Start the server
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+## Configuration Options
+
+The `StripeMcpClient` constructor accepts the following options:
+
+| Option        | Type    | Default                    | Description                                    |
+| ------------- | ------- | -------------------------- | ---------------------------------------------- |
+| apiKey        | string  | process.env.STRIPE_API_KEY | Your Stripe API key                            |
+| tools         | string  | 'paymentLinks.create'      | Comma-separated list of Stripe tools to enable |
+| stripeAccount | string  | process.env.STRIPE_ACCOUNT | Optional Stripe Connect account ID             |
+| debug         | boolean | false                      | Enable debug logging                           |
+
+## API Reference
+
+### `new StripeMcpClient(options)`
+
+Creates a new client instance.
+
+### `client.connect()`
+
+Connects to the Stripe MCP server. Called automatically by other methods if needed.
+
+### `client.createPaymentLink(options)`
+
+Creates a new payment link with the specified options.
+
+Parameters:
+
+- `options`: An object containing the [Stripe Payment Link creation parameters](https://stripe.com/docs/api/payment_links/payment_links/create)
+
+Returns:
+
+- A Promise that resolves to the created payment link object
+
+### `client.close()`
+
+Closes the connection to the Stripe MCP server.
+
+## Testing
+
+```bash
+npm test
+```
+
+## License
+
+MIT
